@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2D Electric Field Simulator</title>
+<meta name="description" content="Interactive 2D Electric Field Simulator with Coulomb's Law visualization, point charges, and dielectric insulators.">
+<style>
+/* ===== RESET & GLOBALS ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-tertiary: #242836;
+  --bg-hover: #2e3346;
+  --accent-blue: #4f8cff;
+  --accent-cyan: #00e5ff;
+  --accent-red: #ff4c6a;
+  --accent-green: #34d399;
+  --accent-orange: #ffaa40;
+  --accent-purple: #a78bfa;
+  --text-primary: #e8eaf0;
+  --text-secondary: #9ca3b8;
+  --text-muted: #5c6378;
+  --border: #2a2e3e;
+  --radius: 10px;
+  --sidebar-width: 280px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+}
+
+/* ===== SIDEBAR ===== */
+#sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+#sidebar::-webkit-scrollbar { width: 4px; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 2px; }
+
+.sidebar-header {
+  padding: 20px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.3px;
+}
+
+.sidebar-header p {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+
+.section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* Toolbox Buttons */
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.tool-btn {
+  background: var(--bg-tertiary);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius);
+  padding: 10px 8px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.tool-btn:hover { background: var(--bg-hover); }
+
+.tool-btn.active {
+  border-color: var(--accent-blue);
+  background: rgba(79, 140, 255, 0.1);
+  box-shadow: 0 0 12px rgba(79, 140, 255, 0.15);
+}
+
+.tool-btn .icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tool-btn.full-width { grid-column: 1 / -1; }
+
+/* Sliders */
+.slider-group { margin-bottom: 12px; }
+.slider-group:last-child { margin-bottom: 0; }
+
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.slider-label span:first-child { color: var(--text-secondary); }
+.slider-label .value { color: var(--accent-cyan); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(79,140,255,0.4);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+/* Toggle Switch */
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.toggle-row span { font-size: 12px; color: var(--text-secondary); }
+
+.switch {
+  position: relative;
+  width: 38px; height: 20px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider-toggle {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.slider-toggle::before {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.switch input:checked + .slider-toggle { background: var(--accent-blue); }
+.switch input:checked + .slider-toggle::before { transform: translateX(18px); background: #fff; }
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger {
+  background: rgba(255, 76, 106, 0.12);
+  color: var(--accent-red);
+  border: 1px solid rgba(255, 76, 106, 0.2);
+}
+
+.btn-danger:hover { background: rgba(255, 76, 106, 0.22); }
+
+/* Info Panel */
+.info-panel {
+  margin-top: auto;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.info-row .val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* ===== CANVAS AREA ===== */
+#canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Tooltip / Cursor Overlay */
+#cursor-info {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(26, 29, 39, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: none;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  z-index: 20;
+}
+
+/* Object properties popup */
+#obj-props {
+  position: absolute;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: none;
+  z-index: 30;
+  min-width: 200px;
+}
+
+#obj-props .prop-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--accent-cyan);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 700px) {
+  :root { --sidebar-width: 220px; }
+  .tool-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <h1>⚡ Electric Field Sim</h1>
+    <p>Interactive Coulomb's Law Visualizer</p>
+  </div>
+
+  <!-- Toolbox -->
+  <div class="section">
+    <div class="section-title">Toolbox</div>
+    <div class="tool-grid">
+      <button class="tool-btn active" data-tool="positive" title="Place positive charge">
+        <span class="icon">➕</span> + Charge
+      </button>
+      <button class="tool-btn" data-tool="negative" title="Place negative charge">
+        <span class="icon">➖</span> − Charge
+      </button>
+      <button class="tool-btn" data-tool="wall" title="Click & drag to draw a rectangular wall">
+        <span class="icon">🧱</span> Wall
+      </button>
+      <button class="tool-btn" data-tool="sphere" title="Click to place a circular insulator">
+        <span class="icon">🔵</span> Sphere
+      </button>
+      <button class="tool-btn full-width" data-tool="eraser" title="Click an object to delete it">
+        <span class="icon">🗑️</span> Eraser
+      </button>
+    </div>
+  </div>
+
+  <!-- Charge Settings -->
+  <div class="section">
+    <div class="section-title">Charge Settings</div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Magnitude |q|</span><span class="value" id="chargeVal">3</span></div>
+      <input type="range" id="chargeSlider" min="1" max="10" value="3" step="1">
+    </div>
+  </div>
+
+  <!-- Grid / Visualization -->
+  <div class="section">
+    <div class="section-title">Visualization</div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Grid Density</span><span class="value" id="densityVal">25</span></div>
+      <input type="range" id="densitySlider" min="10" max="60" value="25" step="1">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Arrow Scale</span><span class="value" id="arrowVal">1.0</span></div>
+      <input type="range" id="arrowSlider" min="0.3" max="3" value="1" step="0.1">
+    </div>
+    <div class="toggle-row">
+      <span>Equipotential Lines</span>
+      <label class="switch">
+        <input type="checkbox" id="toggleEquipotential">
+        <span class="slider-toggle"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <span>Show Field Lines</span>
+      <label class="switch">
+        <input type="checkbox" id="toggleFieldLines">
+        <span class="slider-toggle"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Insulator Settings -->
+  <div class="section">
+    <div class="section-title">Insulator Defaults</div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Dielectric κ</span><span class="value" id="kappaVal">2.0</span></div>
+      <input type="range" id="kappaSlider" min="1" max="10" value="2" step="0.1">
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="section">
+    <button class="btn btn-danger" id="clearAll">Clear All</button>
+  </div>
+
+  <!-- Info -->
+  <div class="info-panel">
+    <div class="info-row"><span>Objects</span><span class="val" id="infoCount">0</span></div>
+    <div class="info-row"><span>FPS</span><span class="val" id="infoFps">--</span></div>
+  </div>
+</div>
+
+<!-- ===== CANVAS ===== -->
+<div id="canvas-area">
+  <canvas id="fieldCanvas"></canvas>
+  <div id="cursor-info"></div>
+</div>
+
+<!-- ===== JAVASCRIPT ===== -->
+<script>
+// ============================================================
+// 2D Electric Field Simulator
+// Physics: Coulomb's Law — E = k * q / r²
+// ============================================================
+
+(() => {
+  'use strict';
+
+  // ---- Constants ----
+  const K_COULOMB = 800; // Scaled Coulomb constant for visual clarity (not SI)
+  const MIN_R = 15;       // Minimum distance to avoid singularity near charges
+
+  // ---- DOM References ----
+  const canvas   = document.getElementById('fieldCanvas');
+  const ctx      = canvas.getContext('2d');
+  const area     = document.getElementById('canvas-area');
+  const cursorEl = document.getElementById('cursor-info');
+
+  // Sliders
+  const chargeSlider  = document.getElementById('chargeSlider');
+  const densitySlider = document.getElementById('densitySlider');
+  const arrowSlider   = document.getElementById('arrowSlider');
+  const kappaSlider   = document.getElementById('kappaSlider');
+
+  // Value displays
+  const chargeVal  = document.getElementById('chargeVal');
+  const densityVal = document.getElementById('densityVal');
+  const arrowVal   = document.getElementById('arrowVal');
+  const kappaVal   = document.getElementById('kappaVal');
+
+  // Toggles
+  const togEqui  = document.getElementById('toggleEquipotential');
+  const togField = document.getElementById('toggleFieldLines');
+
+  // Info
+  const infoCount = document.getElementById('infoCount');
+  const infoFps   = document.getElementById('infoFps');
+
+  // ---- State ----
+  let activeTool     = 'positive';
+  let chargeMag      = 3;
+  let gridSpacing    = 25;
+  let arrowScale     = 1.0;
+  let defaultKappa   = 2.0;
+  let showEqui       = false;
+  let showFieldLines = false;
+
+  /** Array of simulation objects.
+   *  Charge:    { type:'charge', x, y, q, radius:12 }
+   *  Wall:      { type:'wall', x, y, w, h, kappa }
+   *  Sphere:    { type:'sphere', x, y, radius, kappa }
+   */
+  let objects = [];
+
+  // Interaction state
+  let dragging   = null;   // object being dragged
+  let dragOffset = {x:0, y:0};
+  let wallStart  = null;   // {x,y} for wall creation
+  let mouseX = 0, mouseY = 0;
+
+  // FPS tracking
+  let frameCount = 0, lastFpsTime = performance.now(), currentFps = 0;
+
+  // ---- Sidebar Controls ----
+  // Tool buttons
+  document.querySelectorAll('.tool-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeTool = btn.dataset.tool;
+      canvas.style.cursor = activeTool === 'eraser' ? 'crosshair' : 'default';
+    });
+  });
+
+  // Sliders
+  chargeSlider.addEventListener('input', () => { chargeMag = +chargeSlider.value; chargeVal.textContent = chargeMag; });
+  densitySlider.addEventListener('input', () => { gridSpacing = +densitySlider.value; densityVal.textContent = gridSpacing; });
+  arrowSlider.addEventListener('input', () => { arrowScale = +arrowSlider.value; arrowVal.textContent = arrowScale.toFixed(1); });
+  kappaSlider.addEventListener('input', () => { defaultKappa = +kappaSlider.value; kappaVal.textContent = defaultKappa.toFixed(1); });
+
+  // Toggles
+  togEqui.addEventListener('change', () => { showEqui = togEqui.checked; });
+  togField.addEventListener('change', () => { showFieldLines = togField.checked; });
+
+  // Clear all
+  document.getElementById('clearAll').addEventListener('click', () => { objects = []; });
+
+  // ---- Canvas Sizing ----
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = area.clientWidth  * dpr;
+    canvas.height = area.clientHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- Hit Testing ----
+  function hitTest(x, y) {
+    // Iterate in reverse so top-most objects are picked first
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const o = objects[i];
+      if (o.type === 'charge') {
+        const d = Math.hypot(x - o.x, y - o.y);
+        if (d <= o.radius + 5) return o;
+      } else if (o.type === 'sphere') {
+        const d = Math.hypot(x - o.x, y - o.y);
+        if (d <= o.radius + 3) return o;
+      } else if (o.type === 'wall') {
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return o;
+      }
+    }
+    return null;
+  }
+
+  // ---- Mouse / Pointer Events ----
+  function getCanvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  canvas.addEventListener('mousedown', e => {
+    const p = getCanvasPos(e);
+    mouseX = p.x; mouseY = p.y;
+
+    // If eraser, delete object under cursor
+    if (activeTool === 'eraser') {
+      const hit = hitTest(p.x, p.y);
+      if (hit) objects.splice(objects.indexOf(hit), 1);
+      return;
+    }
+
+    // Check if we're clicking an existing object (to drag it)
+    const hit = hitTest(p.x, p.y);
+    if (hit) {
+      dragging = hit;
+      dragOffset.x = p.x - hit.x;
+      dragOffset.y = p.y - hit.y;
+      return;
+    }
+
+    // Otherwise, place new object
+    if (activeTool === 'positive') {
+      objects.push({ type:'charge', x:p.x, y:p.y, q: chargeMag, radius:12 });
+    } else if (activeTool === 'negative') {
+      objects.push({ type:'charge', x:p.x, y:p.y, q: -chargeMag, radius:12 });
+    } else if (activeTool === 'wall') {
+      wallStart = { x: p.x, y: p.y };
+    } else if (activeTool === 'sphere') {
+      objects.push({ type:'sphere', x:p.x, y:p.y, radius:30, kappa: defaultKappa });
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const p = getCanvasPos(e);
+    mouseX = p.x; mouseY = p.y;
+
+    if (dragging) {
+      dragging.x = p.x - dragOffset.x;
+      dragging.y = p.y - dragOffset.y;
+      return;
+    }
+
+    // Show cursor info
+    if (objects.some(o => o.type === 'charge')) {
+      const ef = computeField(p.x, p.y);
+      const mag = Math.hypot(ef.ex, ef.ey);
+      cursorEl.style.display = 'block';
+      cursorEl.style.left = (p.x + 15) + 'px';
+      cursorEl.style.top  = (p.y - 10) + 'px';
+      cursorEl.textContent = `|E| = ${mag.toFixed(2)}`;
+    } else {
+      cursorEl.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    const p = getCanvasPos(e);
+
+    // Finish wall draw
+    if (activeTool === 'wall' && wallStart && !dragging) {
+      const x = Math.min(wallStart.x, p.x);
+      const y = Math.min(wallStart.y, p.y);
+      const w = Math.abs(p.x - wallStart.x);
+      const h = Math.abs(p.y - wallStart.y);
+      if (w > 5 && h > 5) {
+        objects.push({ type:'wall', x, y, w, h, kappa: defaultKappa });
+      }
+      wallStart = null;
+    }
+
+    dragging = null;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    cursorEl.style.display = 'none';
+    dragging = null;
+    wallStart = null;
+  });
+
+  // ============================================================
+  // PHYSICS CORE
+  // ============================================================
+
+  /**
+   * Determine the effective dielectric constant at point (px, py).
+   * If the point is inside any insulator, use its κ; otherwise κ = 1.
+   * Multiple overlapping insulators multiply their κ values.
+   */
+  function getKappa(px, py) {
+    let kappa = 1;
+    for (const o of objects) {
+      if (o.type === 'wall') {
+        if (px >= o.x && px <= o.x + o.w && py >= o.y && py <= o.y + o.h) {
+          kappa *= o.kappa;
+        }
+      } else if (o.type === 'sphere') {
+        if (Math.hypot(px - o.x, py - o.y) <= o.radius) {
+          kappa *= o.kappa;
+        }
+      }
+    }
+    return kappa;
+  }
+
+  /**
+   * Compute the total electric field vector at point (px, py)
+   * using Coulomb's Law:
+   *
+   *   E = Σ  k * q_i / (κ * r_i²)  ·  r̂_i
+   *
+   * where r_i is the distance from charge i to (px, py),
+   * r̂_i is the unit vector pointing from the charge to the point,
+   * k is Coulomb's constant, and κ is the local dielectric constant.
+   *
+   * Returns { ex, ey } — the x and y components of the field.
+   */
+  function computeField(px, py) {
+    let ex = 0, ey = 0;
+    const kappa = getKappa(px, py);
+
+    for (const o of objects) {
+      if (o.type !== 'charge') continue;
+
+      // Vector from charge to point
+      const dx = px - o.x;
+      const dy = py - o.y;
+
+      // Distance (clamped to MIN_R to avoid division-by-zero singularity)
+      const r = Math.max(Math.hypot(dx, dy), MIN_R);
+
+      // Coulomb's Law: field magnitude = k * |q| / (κ * r²)
+      // Direction: away from positive charges, toward negative charges
+      const eMag = K_COULOMB * o.q / (kappa * r * r);
+
+      // Decompose into x and y using unit vector (dx/r, dy/r)
+      ex += eMag * (dx / r);
+      ey += eMag * (dy / r);
+    }
+
+    return { ex, ey };
+  }
+
+  /**
+   * Compute the electric potential at point (px, py):
+   *
+   *   V = Σ  k * q_i / (κ * r_i)
+   *
+   * This is the scalar potential, used for equipotential lines.
+   */
+  function computePotential(px, py) {
+    let v = 0;
+    const kappa = getKappa(px, py);
+
+    for (const o of objects) {
+      if (o.type !== 'charge') continue;
+      const dx = px - o.x;
+      const dy = py - o.y;
+      const r = Math.max(Math.hypot(dx, dy), MIN_R);
+
+      // V = k * q / (κ * r)
+      v += K_COULOMB * o.q / (kappa * r);
+    }
+    return v;
+  }
+
+  // ============================================================
+  // RENDERING
+  // ============================================================
+
+  /** Draw a single arrow from (x,y) in direction (ex,ey) with given magnitude. */
+  function drawArrow(x, y, ex, ey, mag) {
+    // Log-scale mapping for visual clarity:
+    // log(1 + mag) compresses high magnitudes so the display doesn't wash out
+    const logMag = Math.log1p(mag);      // log(1 + mag)
+    const maxLog = Math.log1p(50);       // normalisation upper bound
+
+    // Arrow length proportional to log magnitude, scaled by user slider
+    const len = Math.min(logMag / maxLog * gridSpacing * 0.8 * arrowScale, gridSpacing * 0.9);
+    if (len < 1) return;
+
+    // Normalised direction
+    const angle = Math.atan2(ey, ex);
+
+    // Color mapping: low → blue/cyan, medium → yellow, high → red/pink
+    const t = Math.min(logMag / maxLog, 1);
+    const color = fieldColor(t);
+
+    // Opacity also scales with magnitude
+    const alpha = 0.25 + 0.75 * t;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.fillStyle   = color;
+    ctx.lineWidth   = 1.3;
+
+    // Arrow body
+    ctx.beginPath();
+    ctx.moveTo(-len / 2, 0);
+    ctx.lineTo(len / 2, 0);
+    ctx.stroke();
+
+    // Arrowhead
+    const headLen = Math.min(len * 0.35, 6);
+    ctx.beginPath();
+    ctx.moveTo(len / 2, 0);
+    ctx.lineTo(len / 2 - headLen, -headLen * 0.55);
+    ctx.lineTo(len / 2 - headLen,  headLen * 0.55);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /** Map normalised t ∈ [0,1] to a field-strength colour (blue → cyan → yellow → red). */
+  function fieldColor(t) {
+    if (t < 0.33) {
+      const s = t / 0.33;
+      return `rgb(${Math.round(30 + 0 * s)}, ${Math.round(100 + 155 * s)}, ${Math.round(255 - 55 * s)})`;
+    } else if (t < 0.66) {
+      const s = (t - 0.33) / 0.33;
+      return `rgb(${Math.round(30 + 225 * s)}, ${Math.round(255 - 30 * s)}, ${Math.round(200 - 160 * s)})`;
+    } else {
+      const s = (t - 0.66) / 0.34;
+      return `rgb(${Math.round(255)}, ${Math.round(225 - 155 * s)}, ${Math.round(40 + 40 * s)})`;
+    }
+  }
+
+  /** Draw vector field arrows on the grid. */
+  function drawVectorField() {
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+
+    for (let gx = gridSpacing / 2; gx < w; gx += gridSpacing) {
+      for (let gy = gridSpacing / 2; gy < h; gy += gridSpacing) {
+        // Skip grid points that are inside an insulator (treat as blocked)
+        let inside = false;
+        for (const o of objects) {
+          if (o.type === 'wall' && gx >= o.x && gx <= o.x + o.w && gy >= o.y && gy <= o.y + o.h) { inside = true; break; }
+          if (o.type === 'sphere' && Math.hypot(gx - o.x, gy - o.y) <= o.radius) { inside = true; break; }
+        }
+        if (inside) continue;
+
+        const { ex, ey } = computeField(gx, gy);
+        const mag = Math.hypot(ex, ey);
+        if (mag > 0.01) drawArrow(gx, gy, ex, ey, mag);
+      }
+    }
+  }
+
+  /**
+   * Draw equipotential lines using marching squares.
+   * We sample V on a grid and draw contours at fixed potential levels.
+   */
+  function drawEquipotentialLines() {
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+    const step = 8; // sampling resolution (pixels)
+
+    const cols = Math.ceil(w / step) + 1;
+    const rows = Math.ceil(h / step) + 1;
+
+    // Sample potential on the grid
+    const pot = new Float32Array(cols * rows);
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        pot[j * cols + i] = computePotential(i * step, j * step);
+      }
+    }
+
+    // Choose contour levels symmetrically around 0
+    const levels = [];
+    for (let v = -200; v <= 200; v += 15) {
+      if (v !== 0) levels.push(v);
+    }
+
+    ctx.lineWidth = 0.8;
+
+    for (const level of levels) {
+      ctx.strokeStyle = level > 0
+        ? 'rgba(255, 100, 120, 0.25)'
+        : 'rgba(100, 180, 255, 0.25)';
+
+      ctx.beginPath();
+
+      for (let j = 0; j < rows - 1; j++) {
+        for (let i = 0; i < cols - 1; i++) {
+          // Four corners of the cell
+          const v00 = pot[j * cols + i];
+          const v10 = pot[j * cols + i + 1];
+          const v01 = pot[(j + 1) * cols + i];
+          const v11 = pot[(j + 1) * cols + i + 1];
+
+          // Marching squares: classify corners as above/below the level
+          let code = 0;
+          if (v00 >= level) code |= 1;
+          if (v10 >= level) code |= 2;
+          if (v11 >= level) code |= 4;
+          if (v01 >= level) code |= 8;
+
+          if (code === 0 || code === 15) continue;
+
+          // Interpolation helper: fraction along edge where contour crosses
+          const lerp = (a, b) => (a === b) ? 0.5 : (level - a) / (b - a);
+
+          const x0 = i * step, y0 = j * step;
+
+          // Edge midpoints (interpolated)
+          const top    = { x: x0 + lerp(v00, v10) * step, y: y0 };
+          const right  = { x: x0 + step, y: y0 + lerp(v10, v11) * step };
+          const bottom = { x: x0 + lerp(v01, v11) * step, y: y0 + step };
+          const left   = { x: x0, y: y0 + lerp(v00, v01) * step };
+
+          // Draw line segments for each marching-squares case
+          const segments = marchingSquaresSegments(code, top, right, bottom, left);
+          for (const seg of segments) {
+            ctx.moveTo(seg[0].x, seg[0].y);
+            ctx.lineTo(seg[1].x, seg[1].y);
+          }
+        }
+      }
+      ctx.stroke();
+    }
+  }
+
+  /** Return line segments for marching squares case. */
+  function marchingSquaresSegments(code, top, right, bottom, left) {
+    switch (code) {
+      case  1: return [[left, top]];
+      case  2: return [[top, right]];
+      case  3: return [[left, right]];
+      case  4: return [[right, bottom]];
+      case  5: return [[left, top], [right, bottom]]; // saddle
+      case  6: return [[top, bottom]];
+      case  7: return [[left, bottom]];
+      case  8: return [[bottom, left]];
+      case  9: return [[bottom, top]];
+      case 10: return [[top, right], [bottom, left]]; // saddle
+      case 11: return [[bottom, right]];
+      case 12: return [[right, left]];
+      case 13: return [[right, top]];
+      case 14: return [[top, left]];
+      default: return [];
+    }
+  }
+
+  /**
+   * Draw electric field lines emanating from charges.
+   * Uses Euler integration to trace the path of a test charge.
+   */
+  function drawFieldLines() {
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+    const numLines = 16;        // lines per charge
+    const stepSize = 3;         // integration step (px)
+    const maxSteps = 600;
+
+    ctx.lineWidth = 1;
+
+    for (const obj of objects) {
+      if (obj.type !== 'charge') continue;
+      const sign = obj.q > 0 ? 1 : -1;
+
+      for (let i = 0; i < numLines; i++) {
+        // Start points arranged in a circle around the charge
+        const angle = (2 * Math.PI * i) / numLines;
+        let x = obj.x + Math.cos(angle) * (obj.radius + 3);
+        let y = obj.y + Math.sin(angle) * (obj.radius + 3);
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+
+        // Gradient along the line
+        const lineAlpha = 0.5;
+        ctx.strokeStyle = sign > 0
+          ? `rgba(255, 120, 140, ${lineAlpha})`
+          : `rgba(120, 180, 255, ${lineAlpha})`;
+
+        for (let s = 0; s < maxSteps; s++) {
+          const { ex, ey } = computeField(x, y);
+          const mag = Math.hypot(ex, ey);
+          if (mag < 0.01) break;
+
+          // Move in the direction of the field (or reverse for negative)
+          x += sign * stepSize * (ex / mag);
+          y += sign * stepSize * (ey / mag);
+
+          // Stop if out of bounds
+          if (x < 0 || x > w || y < 0 || y > h) break;
+
+          // Stop if we reach another charge
+          let hitCharge = false;
+          for (const c of objects) {
+            if (c.type === 'charge' && c !== obj) {
+              if (Math.hypot(x - c.x, y - c.y) < c.radius) { hitCharge = true; break; }
+            }
+          }
+          if (hitCharge) { ctx.lineTo(x, y); break; }
+
+          // Stop if inside insulator
+          let insideIns = false;
+          for (const ins of objects) {
+            if (ins.type === 'wall' && x >= ins.x && x <= ins.x + ins.w && y >= ins.y && y <= ins.y + ins.h) { insideIns = true; break; }
+            if (ins.type === 'sphere' && Math.hypot(x - ins.x, y - ins.y) <= ins.radius) { insideIns = true; break; }
+          }
+          if (insideIns) { ctx.lineTo(x, y); break; }
+
+          ctx.lineTo(x, y);
+        }
+
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** Draw all objects (charges, walls, spheres). */
+  function drawObjects() {
+    for (const o of objects) {
+      if (o.type === 'charge') {
+        // Glow effect
+        const grd = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 28);
+        if (o.q > 0) {
+          grd.addColorStop(0, 'rgba(255, 76, 106, 0.35)');
+          grd.addColorStop(1, 'rgba(255, 76, 106, 0)');
+        } else {
+          grd.addColorStop(0, 'rgba(79, 140, 255, 0.35)');
+          grd.addColorStop(1, 'rgba(79, 140, 255, 0)');
+        }
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 28, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Charge circle
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2);
+        ctx.fillStyle = o.q > 0 ? '#ff4c6a' : '#4f8cff';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = o.q > 0 ? '#ff8da0' : '#8ab8ff';
+        ctx.stroke();
+
+        // Sign label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(o.q > 0 ? '+' : '−', o.x, o.y);
+
+        // Magnitude label
+        ctx.font = '9px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText(`${Math.abs(o.q)}`, o.x, o.y + o.radius + 11);
+
+      } else if (o.type === 'wall') {
+        // Wall insulator
+        ctx.fillStyle = 'rgba(167, 139, 250, 0.12)';
+        ctx.strokeStyle = 'rgba(167, 139, 250, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(o.x, o.y, o.w, o.h, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Diagonal hatch pattern
+        ctx.save();
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(167, 139, 250, 0.1)';
+        ctx.lineWidth = 1;
+        for (let d = -Math.max(o.w, o.h); d < Math.max(o.w, o.h) * 2; d += 10) {
+          ctx.beginPath();
+          ctx.moveTo(o.x + d, o.y);
+          ctx.lineTo(o.x + d - o.h, o.y + o.h);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // κ label
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(167, 139, 250, 0.8)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`κ=${o.kappa.toFixed(1)}`, o.x + o.w / 2, o.y + o.h / 2);
+
+      } else if (o.type === 'sphere') {
+        // Sphere insulator
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(52, 211, 153, 0.1)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Inner rings
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.radius * 0.6, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.15)';
+        ctx.stroke();
+
+        // κ label
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(52, 211, 153, 0.8)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`κ=${o.kappa.toFixed(1)}`, o.x, o.y);
+      }
+    }
+  }
+
+  /** Draw the wall-creation preview rectangle. */
+  function drawWallPreview() {
+    if (activeTool !== 'wall' || !wallStart) return;
+    const x = Math.min(wallStart.x, mouseX);
+    const y = Math.min(wallStart.y, mouseY);
+    const w = Math.abs(mouseX - wallStart.x);
+    const h = Math.abs(mouseY - wallStart.y);
+
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(167, 139, 250, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+  }
+
+  /** Draw subtle background grid. */
+  function drawBackgroundGrid() {
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < w; x += gridSpacing) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += gridSpacing) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+  }
+
+  // ============================================================
+  // MAIN ANIMATION LOOP
+  // ============================================================
+  function frame(timestamp) {
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+
+    // Background grid
+    drawBackgroundGrid();
+
+    // Equipotential lines (drawn first, behind everything)
+    if (showEqui && objects.some(o => o.type === 'charge')) {
+      drawEquipotentialLines();
+    }
+
+    // Vector field arrows
+    if (objects.some(o => o.type === 'charge')) {
+      drawVectorField();
+    }
+
+    // Field lines
+    if (showFieldLines && objects.some(o => o.type === 'charge')) {
+      drawFieldLines();
+    }
+
+    // Objects on top
+    drawObjects();
+
+    // Wall preview
+    drawWallPreview();
+
+    // FPS counter
+    frameCount++;
+    if (timestamp - lastFpsTime >= 1000) {
+      currentFps = frameCount;
+      frameCount = 0;
+      lastFpsTime = timestamp;
+      infoFps.textContent = currentFps;
+    }
+
+    // Object count
+    infoCount.textContent = objects.length;
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
